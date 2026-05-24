@@ -12,7 +12,7 @@ Pendant la recherche de stage, les réponses des recruteurs se noient dans les a
 2. Groq (Llama 3) analyse chaque email et détecte si c'est une réponse de stage
 3. Une notification Telegram est envoyée instantanément
 
-## Stack technique
+## Outils utilisés
 
 - **Python** — agent principal
 - **Gmail API** — lecture des emails via OAuth 2.0

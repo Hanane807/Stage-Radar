@@ -32,8 +32,6 @@ def is_stage_response(email_subject , email_from , email_body):
         temperature=0   
     )
 
-    # On extrait le texte de la réponse
     result = response.choices[0].message.content.strip().upper()
     
-    # On retourne True si la réponse est OUI
     return result == "OUI"

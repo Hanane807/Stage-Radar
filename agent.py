@@ -16,33 +16,26 @@ def get_gmail_service():
 
     creds = None
 
-    # Si token.json existe déjà → on l'utilise directement (pas besoin de réautoriser)
     if os.path.exists("token.json"):
         creds = Credentials.from_authorized_user_file("token.json", GMAIL_SCOPES)
 
-    # Si pas de token ou token expiré → on redemande l'autorisation
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # On rafraîchit le token automatiquement
+            creds.refresh(Request())  
         else:
-            # Ouvre le navigateur pour que tu autorises l'accès Gmail
             flow = InstalledAppFlow.from_client_secrets_file("credentials.json", GMAIL_SCOPES)
             creds = flow.run_local_server(port=0)
 
-        # On sauvegarde le token pour la prochaine fois
         with open("token.json", "w") as token:
             token.write(creds.to_json())
 
-    # On retourne le service Gmail prêt à utiliser
     return build("gmail", "v1", credentials=creds)
 
 
 def get_new_emails(service, last_check_time):
 
-    # On convertit le timestamp en format que Gmail comprend
     query = f"after:{int(last_check_time)} is:unread"
 
-    # Requête à l'API Gmail pour récupérer les IDs des emails
     results = service.users().messages().list(
         userId="me",
         q=query
@@ -52,14 +45,12 @@ def get_new_emails(service, last_check_time):
     emails = []
 
     for msg in messages:
-        # Pour chaque ID on récupère le contenu complet de l'email
         msg_data = service.users().messages().get(
             userId="me",
             id=msg["id"],
             format="full"
         ).execute()
 
-        # On extrait les headers (expéditeur, objet...)
         headers = msg_data["payload"]["headers"]
         email_from = next((h["value"] for h in headers if h["name"] == "From"), "Inconnu")
         email_subject = next((h["value"] for h in headers if h["name"] == "Subject"), "Sans objet")
@@ -95,7 +86,6 @@ def load_last_check():
     if os.path.exists("last_check.txt"):
         with open("last_check.txt", "r") as f:
             return float(f.read())
-    # Si le fichier n'existe pas → première fois → on repart d'il y a 24h
     return time.time() - (24 * 60 * 60)
 
 def run_agent():
@@ -103,7 +93,6 @@ def run_agent():
     print("Stage Radar démarré !")
     print(f"Vérification toutes les {CHECK_INTERVAL_MINUTES} minutes\n")
 
-    # On se connecte à Gmail
     service = get_gmail_service()
     print("Connecté à Gmail !\n")
 
