@@ -12,8 +12,8 @@ from config import GMAIL_SCOPES, CHECK_INTERVAL_MINUTES
 from classifier import is_stage_response
 from notifier import send_telegram_notification
 
-def get_gmail_service():
 
+def get_gmail_service():
     creds = None
 
     if os.path.exists("token.json"):
@@ -21,7 +21,7 @@ def get_gmail_service():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  
+            creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file("credentials.json", GMAIL_SCOPES)
             creds = flow.run_local_server(port=0)
@@ -33,7 +33,6 @@ def get_gmail_service():
 
 
 def get_new_emails(service, last_check_time):
-
     query = f"after:{int(last_check_time)} is:unread"
 
     results = service.users().messages().list(
@@ -55,7 +54,6 @@ def get_new_emails(service, last_check_time):
         email_from = next((h["value"] for h in headers if h["name"] == "From"), "Inconnu")
         email_subject = next((h["value"] for h in headers if h["name"] == "Subject"), "Sans objet")
 
-        # On extrait le corps de l'email
         email_body = ""
         if "parts" in msg_data["payload"]:
             for part in msg_data["payload"]["parts"]:
@@ -63,11 +61,11 @@ def get_new_emails(service, last_check_time):
                     data = part["body"].get("data", "")
                     email_body = base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
                     break
-        
-        # Le lien direct vers l'email dans Gmail
+
         email_link = f"https://mail.google.com/mail/u/0/#inbox/{msg['id']}"
 
         emails.append({
+            "id": msg["id"],
             "from": email_from,
             "subject": email_subject,
             "body": email_body,
@@ -76,17 +74,30 @@ def get_new_emails(service, last_check_time):
 
     return emails
 
+
 def save_last_check(timestamp):
-    """Sauvegarde le timestamp dans un fichier"""
     with open("last_check.txt", "w") as f:
         f.write(str(timestamp))
 
+
 def load_last_check():
-    """Charge le timestamp depuis le fichier"""
     if os.path.exists("last_check.txt"):
         with open("last_check.txt", "r") as f:
             return float(f.read())
     return time.time() - (24 * 60 * 60)
+
+
+def load_processed_ids():
+    if os.path.exists("processed_ids.txt"):
+        with open("processed_ids.txt", "r") as f:
+            return set(f.read().splitlines())
+    return set()
+
+
+def save_processed_id(msg_id):
+    with open("processed_ids.txt", "a") as f:
+        f.write(msg_id + "\n")
+
 
 def run_agent():
 
@@ -97,21 +108,25 @@ def run_agent():
     print("Connecté à Gmail !\n")
 
     last_check_time = load_last_check()
+    emails_traites = load_processed_ids()
 
     while True:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Vérification des emails...")
 
         try:
-            # On récupère les nouveaux emails
             emails = get_new_emails(service, last_check_time)
             print(f"  → {len(emails)} nouvel(s) email(s) trouvé(s)")
 
             for email in emails:
+
+                # Email déjà traité → on skip
+                if email["id"] in emails_traites:
+                    continue
+
                 print(f"  → Analyse : {email['subject'][:50]}...")
 
-                # On demande à Groq si c'est une réponse de stage
                 if is_stage_response(email["subject"], email["from"], email["body"]):
-                    print(f"RÉPONSE DE STAGE DÉTECTÉE !")
+                    print(f"  RÉPONSE DE STAGE DÉTECTÉE !")
                     send_telegram_notification(
                         email["from"],
                         email["subject"],
@@ -119,13 +134,17 @@ def run_agent():
                         email["link"]
                     )
 
+                # Marquer comme traité en mémoire et sur disque
+                emails_traites.add(email["id"])
+                save_processed_id(email["id"])
+
             last_check_time = time.time()
             save_last_check(last_check_time)
 
         except Exception as e:
-            print(f"Erreur : {e}")
+            print(f"  Erreur : {e}")
 
-        print(f"Prochaine vérification dans {CHECK_INTERVAL_MINUTES} minutes\n")
+        print(f"  Prochaine vérification dans {CHECK_INTERVAL_MINUTES} minutes\n")
         time.sleep(CHECK_INTERVAL_MINUTES * 60)
 
 

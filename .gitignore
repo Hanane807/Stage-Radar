@@ -5,3 +5,4 @@ last_check.txt
 __pycache__/
 *.pyc
 venv/
+processed_ids.txt
